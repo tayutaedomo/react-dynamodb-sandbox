@@ -36,3 +36,17 @@ cd ../terraform/app
 terraform init
 terraform apply
 ```
+
+### 4. デプロイの動作確認（正常性の判断基準）
+デプロイ完了後、API Gateway のエンドポイントに対して疎通確認を行います。
+
+1. 以下のコマンドで、構築された API のベース URL を確認します。
+   ```bash
+   terraform output api_endpoint
+   ```
+2. 出力された URL に `/api/health` を付与してアクセスします。
+   ```bash
+   curl <api_endpoint>/api/health
+   ```
+3. **【成功の基準】**
+   レスポンスとして `{"status":"ok","message":"Backend is running"}` が返ってくれば、AWS 上へのインフラ構築・アプリのデプロイはすべて正常に完了しています。

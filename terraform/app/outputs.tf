@@ -10,3 +10,7 @@ output "cognito_region" {
   value = "ap-northeast-1"
 }
 
+
+output "api_endpoint" {
+  value = aws_apigatewayv2_api.backend.api_endpoint
+}
