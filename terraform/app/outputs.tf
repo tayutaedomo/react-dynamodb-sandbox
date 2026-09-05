@@ -7,7 +7,7 @@ output "cognito_client_id" {
 }
 
 output "cognito_region" {
-  value = "ap-northeast-1"
+  value = data.aws_region.current.name
 }
 
 

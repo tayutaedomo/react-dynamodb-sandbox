@@ -53,6 +53,7 @@ resource "aws_cognito_user_pool_client" "main" {
 # -------------------------------------------------------------
 
 data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
 # Lambda 実行用 IAM ロール
 resource "aws_iam_role" "lambda_exec" {
@@ -84,13 +85,21 @@ resource "aws_lambda_function" "backend" {
 
   # 先ほどスクリプトで Push したイメージの URI を指定
   package_type = "Image"
-  image_uri    = "${data.aws_caller_identity.current.account_id}.dkr.ecr.ap-northeast-1.amazonaws.com/react-dynamodb-sandbox-backend:latest"
+  image_uri    = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/react-dynamodb-sandbox-backend:latest"
 
   # スクリプトで linux/arm64 としてビルドしたため必須
   architectures = ["arm64"]
 
   timeout     = 30
   memory_size = 256
+
+  environment {
+    variables = {
+      COGNITO_REGION       = data.aws_region.current.name
+      COGNITO_USER_POOL_ID = aws_cognito_user_pool.main.id
+      COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.main.id
+    }
+  }
 }
 
 # API Gateway (HTTP API)
