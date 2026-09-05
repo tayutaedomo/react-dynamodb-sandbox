@@ -5,10 +5,27 @@ description = "FastAPI backend for react-dynamodb-sandbox"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi==0.115.0",
-    "uvicorn==0.30.6",
-    "PyJWT==2.9.0",
-    "cryptography==43.0.1",
-    "httpx==0.27.2",
-    "pydantic==2.9.2"
+    "fastapi==0.141.1",
+    "uvicorn==0.52.4",
+    "pyjwt[crypto]==2.13.0",
+    "cryptography==50.0.1",
+    "httpx==0.28.1",
+    "pydantic==2.13.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "httpx2==2.12.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "."
+]
+# NOTE: starlette内部で発生するanyio v4系のDeprecationWarningを非表示にする設定です。
+# starlette側の対応アップデートが完了するまでの暫定対応であり、
+# パフォーマンス改善等を含む最新のanyioを利用し続けるための意図的な無視です。
+filterwarnings = [
+    "ignore:The anyio\\.abc\\.BlockingPortal alias is deprecated:DeprecationWarning:starlette.*",
 ]
