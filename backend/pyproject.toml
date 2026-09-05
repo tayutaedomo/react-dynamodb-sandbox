@@ -1,0 +1,14 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "FastAPI backend for react-dynamodb-sandbox"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.115.0",
+    "uvicorn==0.30.6",
+    "PyJWT==2.9.0",
+    "cryptography==43.0.1",
+    "httpx==0.27.2",
+    "pydantic==2.9.2"
+]
