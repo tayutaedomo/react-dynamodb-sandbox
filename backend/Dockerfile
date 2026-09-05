@@ -10,4 +10,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 COPY app ./app
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Lambda は /tmp 以外 Read-Only のため、uv run は使わず .venv の Python を直接使う
+ENV PATH="/var/task/.venv/bin:$PATH"
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

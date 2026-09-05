@@ -21,9 +21,9 @@ docker tag ${REPO_NAME}:latest ${IMAGE_URI}
 echo "Pushing image to ECR..."
 docker push ${IMAGE_URI}
 
-if aws lambda get-function --function-name ${REPO_NAME} > /dev/null 2>&1; then
+if aws lambda get-function --function-name ${REPO_NAME} --region ${REGION} > /dev/null 2>&1; then
     echo "Updating Lambda function code..."
-    aws lambda update-function-code --function-name ${REPO_NAME} --image-uri ${IMAGE_URI} > /dev/null
+    aws lambda update-function-code --function-name ${REPO_NAME} --image-uri ${IMAGE_URI} --region ${REGION} > /dev/null
     echo "Deployment complete!"
 else
     echo "Image pushed successfully. (Lambda function does not exist yet. Please run terraform apply in terraform/app to create it.)"
