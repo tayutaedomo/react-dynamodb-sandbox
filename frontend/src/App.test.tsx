@@ -19,18 +19,16 @@ describe('App Component', () => {
   });
 
   it('タイトルとログインフォームが正常にレンダリングされること', () => {
+    // 初回描画のセッションチェックはエラー（未ログイン）にする
+    vi.mocked(auth.getCurrentUser).mockRejectedValueOnce(new Error('not signed in'));
     render(<App />);
     expect(screen.getByText('React DynamoDB Sandbox')).toBeDefined();
     expect(screen.getByRole('button', { name: 'ログイン' })).toBeDefined();
   });
 
   it('フォームを入力して送信すると、signIn APIが呼ばれてログイン後の画面になること', async () => {
-    // ログイン成功時に返ってくるユーザー情報のモックを設定
-    vi.mocked(auth.getCurrentUser).mockResolvedValue({ 
-      username: 'testuser1',
-      userId: 'dummy-id',
-      signInDetails: {}
-    });
+    // 初回描画のセッションチェックはエラー（未ログイン）にする
+    vi.mocked(auth.getCurrentUser).mockRejectedValueOnce(new Error('not signed in'));
     
     render(<App />);
     
@@ -43,7 +41,14 @@ describe('App Component', () => {
     fireEvent.change(usernameInput, { target: { value: 'testuser1' } });
     fireEvent.change(passwordInput, { target: { value: 'Password123!' } });
     
-    // 3. ログインボタンをクリック
+    // 3. ログインボタンを押した直後に getCurrentUser が呼ばれるため、成功情報を返すようにモックを設定
+    vi.mocked(auth.getCurrentUser).mockResolvedValueOnce({ 
+      username: 'testuser1',
+      userId: 'dummy-id',
+      signInDetails: {}
+    });
+
+    // ログインボタンをクリック
     fireEvent.click(loginButton);
 
     // 4. 検証: Amplifyの signIn が入力した値で正しく呼び出されたか

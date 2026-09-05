@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Amplify } from 'aws-amplify';
 import { signIn, signOut, fetchAuthSession, getCurrentUser } from 'aws-amplify/auth';
 
 Amplify.configure({
   Auth: {
     Cognito: {
-      userPoolId: 'ap-northeast-1_XXXXXXX',
-      userPoolClientId: 'XXXXXXXXXXXXXXXXX'
+      userPoolId: import.meta.env.VITE_COGNITO_USER_POOL_ID || '',
+      userPoolClientId: import.meta.env.VITE_COGNITO_CLIENT_ID || ''
     }
   }
 });
@@ -17,6 +17,18 @@ const App: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [message, setMessage] = useState('');
   const [apiResponse, setApiResponse] = useState('');
+
+  // 画面の初回読み込み時に、すでにログイン済みか（セッションが残っているか）チェックする
+  useEffect(() => {
+    getCurrentUser()
+      .then((currentUser) => {
+        setUser(currentUser);
+        setMessage(`ログイン済み: ${currentUser.username}`);
+      })
+      .catch(() => {
+        // 未ログイン状態（セッションなし）の場合はエラーが飛んでくるので無視する
+      });
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +63,8 @@ const App: React.FC = () => {
         return;
       }
 
-      const res = await fetch('http://localhost:8000/api/me', {
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/me`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
