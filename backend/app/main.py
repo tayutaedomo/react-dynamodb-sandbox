@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Depends
-from fastapi.middleware.cors import CORSMiddleware
 import datetime
+
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import verify_token
 from .crud import get_user_profile, put_user_profile
@@ -17,6 +18,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/api/health")
 def health_check():
     """ヘルスチェック用エンドポイント。
@@ -27,6 +29,7 @@ def health_check():
         dict: ステータスとメッセージを含む辞書
     """
     return {"status": "ok", "message": "Backend is running"}
+
 
 @app.get("/api/me")
 def get_current_user(claims: dict = Depends(verify_token)):
@@ -42,12 +45,9 @@ def get_current_user(claims: dict = Depends(verify_token)):
     """
     user_id = claims.get("sub")
     username = claims.get("username", claims.get("cognito:username"))
-    
-    return {
-        "user_id": user_id,
-        "username": username,
-        "claims": claims
-    }
+
+    return {"user_id": user_id, "username": username, "claims": claims}
+
 
 @app.get("/api/me/profile")
 def read_profile(claims: dict = Depends(verify_token)):
@@ -64,7 +64,7 @@ def read_profile(claims: dict = Depends(verify_token)):
     """
     user_id = claims.get("sub")
     profile = get_user_profile(user_id)
-    
+
     if profile is None:
         # 遅延初期化 (Lazy Initialization)
         username = claims.get("username", claims.get("cognito:username", "Unknown"))
@@ -72,11 +72,12 @@ def read_profile(claims: dict = Depends(verify_token)):
             "nickname": username,
             "bio": "Nice to meet you!",
             "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
-            "initialized_by": "api_lazy_init" # どこで初期化されたかをマーキング
+            "initialized_by": "api_lazy_init",  # どこで初期化されたかをマーキング
         }
         profile = put_user_profile(user_id, default_data)
-        
+
     return {"status": "success", "profile": profile}
+
 
 @app.post("/api/me/profile")
 def update_profile(data: ProfileUpdate, claims: dict = Depends(verify_token)):
@@ -92,17 +93,17 @@ def update_profile(data: ProfileUpdate, claims: dict = Depends(verify_token)):
         dict: ステータスと更新後のプロフィール情報を含む辞書
     """
     user_id = claims.get("sub")
-    
+
     # 既存のデータを取得（一部更新のため）
     profile = get_user_profile(user_id) or {}
-    
+
     # マージして保存
     updated_data = {
         **profile,
         "nickname": data.nickname,
         "bio": data.bio,
-        "updated_at": datetime.datetime.now(datetime.UTC).isoformat()
+        "updated_at": datetime.datetime.now(datetime.UTC).isoformat(),
     }
-    
+
     saved = put_user_profile(user_id, updated_data)
     return {"status": "success", "profile": saved}

@@ -1,6 +1,8 @@
 import os
-from pynamodb.models import Model
+
 from pynamodb.attributes import UnicodeAttribute
+from pynamodb.models import Model
+
 
 class UserProfile(Model):
     """DynamoDB のプロフィールテーブルに対応する PynamoDB モデル。
@@ -15,10 +17,13 @@ class UserProfile(Model):
         updated_at (UnicodeAttribute): レコードの最終更新日時 (ISO 8601 形式)。
         initialized_by (UnicodeAttribute): レコードを初期化したシステムまたは手段の識別子。
     """
+
     class Meta:
-        table_name = os.environ.get("DYNAMODB_TABLE_NAME", "react-dynamodb-sandbox-profiles")
+        table_name = os.environ.get(
+            "DYNAMODB_TABLE_NAME", "react-dynamodb-sandbox-profiles"
+        )
         region = os.environ.get("AWS_REGION", "ap-northeast-1")
-    
+
     user_id = UnicodeAttribute(hash_key=True)
     nickname = UnicodeAttribute(null=True)
     bio = UnicodeAttribute(null=True)

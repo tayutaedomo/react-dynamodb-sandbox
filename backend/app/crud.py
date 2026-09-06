@@ -1,6 +1,8 @@
 from fastapi import HTTPException
 from pynamodb.exceptions import DoesNotExist
+
 from .models import UserProfile
+
 
 def get_user_profile(user_id: str):
     """指定された user_id のプロフィールを取得する。
@@ -25,13 +27,14 @@ def get_user_profile(user_id: str):
             "bio": profile.bio,
             "created_at": profile.created_at,
             "updated_at": profile.updated_at,
-            "initialized_by": profile.initialized_by
+            "initialized_by": profile.initialized_by,
         }
     except DoesNotExist:
         return None
     except Exception as e:
         print(f"Error fetching profile for {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Database Error")
+
 
 def put_user_profile(user_id: str, data: dict):
     """指定された user_id のプロフィールを作成/完全上書きする。
@@ -55,13 +58,10 @@ def put_user_profile(user_id: str, data: dict):
         profile.created_at = data.get("created_at")
         profile.updated_at = data.get("updated_at")
         profile.initialized_by = data.get("initialized_by")
-        
+
         profile.save()
-        
-        return {
-            "user_id": user_id,
-            **data
-        }
+
+        return {"user_id": user_id, **data}
     except Exception as e:
         print(f"Error putting profile for {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Database Error")

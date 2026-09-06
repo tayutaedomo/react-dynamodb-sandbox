@@ -19,6 +19,7 @@ dependencies = [
 dev = [
     "pytest==9.1.1",
     "httpx2==2.12.0",
+    "ruff>=0.16.6",
 ]
 
 [tool.pytest.ini_options]
@@ -31,3 +32,7 @@ pythonpath = [
 filterwarnings = [
     "ignore:The anyio\\.abc\\.BlockingPortal alias is deprecated:DeprecationWarning:starlette.*",
 ]
+
+[tool.ruff.lint]
+# FastAPI の Depends() 等の B008 を許容するため、B008 を無視、または FastAPI 固有の書き方を許可
+ignore = ["B008", "BLE001"]

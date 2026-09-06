@@ -1,10 +1,11 @@
-import os
 import json
+import os
+
 import httpx
 import jwt
-from jwt.algorithms import RSAAlgorithm
 from fastapi import HTTPException, Security
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt.algorithms import RSAAlgorithm
 
 COGNITO_REGION = os.environ.get("COGNITO_REGION", "ap-northeast-1")
 COGNITO_USER_POOL_ID = os.environ.get("COGNITO_USER_POOL_ID", "")
@@ -16,6 +17,7 @@ ISSUER = f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL
 security = HTTPBearer()
 
 jwks_cache = {}
+
 
 def get_jwks():
     """Cognito の JWKS (JSON Web Key Set) を取得する。
@@ -39,6 +41,7 @@ def get_jwks():
             raise HTTPException(status_code=500, detail="Could not fetch JWKS")
     return jwks_cache
 
+
 def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
     """HTTP ヘッダーの JWT トークンを検証する。
 
@@ -61,11 +64,15 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
         unverified_header = jwt.get_unverified_header(token)
         kid = unverified_header.get("kid")
         if not kid:
-            raise HTTPException(status_code=401, detail="Invalid token header: missing kid")
+            raise HTTPException(
+                status_code=401, detail="Invalid token header: missing kid"
+            )
 
         # JWKS から一致する公開鍵を取得
         jwks = get_jwks()
-        key_data = next((key for key in jwks.get("keys", []) if key["kid"] == kid), None)
+        key_data = next(
+            (key for key in jwks.get("keys", []) if key["kid"] == kid), None
+        )
         if not key_data:
             raise HTTPException(status_code=401, detail="Public key not found in JWKS")
 
@@ -75,7 +82,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
         # token_use (access か id か) を判別するために一度未検証でデコード
         unverified_claims = jwt.decode(token, options={"verify_signature": False})
         token_use = unverified_claims.get("token_use")
-        
+
         if token_use == "access":
             # Access トークンの検証
             claims = jwt.decode(
@@ -83,10 +90,12 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
                 public_key,
                 algorithms=["RS256"],
                 issuer=ISSUER,
-                options={"verify_aud": False}
+                options={"verify_aud": False},
             )
             if claims.get("client_id") != COGNITO_CLIENT_ID:
-                raise HTTPException(status_code=401, detail="Invalid client_id in access token")
+                raise HTTPException(
+                    status_code=401, detail="Invalid client_id in access token"
+                )
         elif token_use == "id":
             # ID トークンの検証
             claims = jwt.decode(
@@ -94,7 +103,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
                 public_key,
                 algorithms=["RS256"],
                 audience=COGNITO_CLIENT_ID,
-                issuer=ISSUER
+                issuer=ISSUER,
             )
         else:
             raise HTTPException(status_code=401, detail="Invalid token_use")
