@@ -12,55 +12,60 @@ vi.mock('aws-amplify/auth', () => ({
   getCurrentUser: vi.fn(),
 }));
 
-describe('App Component', () => {
+describe('App Component (Routing)', () => {
   beforeEach(() => {
-    // 各テストの前にモックの呼び出し履歴をリセットする
     vi.clearAllMocks();
   });
 
-  it('タイトルとログインフォームが正常にレンダリングされること', () => {
-    // 初回描画のセッションチェックはエラー（未ログイン）にする
+  it('未ログイン時はログイン画面が表示されること', async () => {
     vi.mocked(auth.getCurrentUser).mockRejectedValueOnce(new Error('not signed in'));
     render(<App />);
+    
+    // Loading が終わるまで待機
+    await waitFor(() => {
+      expect(screen.queryByText('Loading...')).toBeNull();
+    });
+
     expect(screen.getByText('React DynamoDB Sandbox')).toBeDefined();
     expect(screen.getByRole('button', { name: 'ログイン' })).toBeDefined();
   });
 
-  it('フォームを入力して送信すると、signIn APIが呼ばれてログイン後の画面になること', async () => {
-    // 初回描画のセッションチェックはエラー（未ログイン）にする
-    vi.mocked(auth.getCurrentUser).mockRejectedValueOnce(new Error('not signed in'));
-    
-    render(<App />);
-    
-    // 1. フォームの要素を取得
-    const usernameInput = screen.getByPlaceholderText('Username');
-    const passwordInput = screen.getByPlaceholderText('Password');
-    const loginButton = screen.getByRole('button', { name: 'ログイン' });
-
-    // 2. ユーザーの入力アクションをシミュレート
-    fireEvent.change(usernameInput, { target: { value: 'testuser1' } });
-    fireEvent.change(passwordInput, { target: { value: 'Password123!' } });
-    
-    // 3. ログインボタンを押した直後に getCurrentUser が呼ばれるため、成功情報を返すようにモックを設定
+  it('ログイン済みの場合はプロフィール画面が表示されること', async () => {
     vi.mocked(auth.getCurrentUser).mockResolvedValueOnce({ 
       username: 'testuser1',
       userId: 'dummy-id',
       signInDetails: {}
     });
-
-    // ログインボタンをクリック
-    fireEvent.click(loginButton);
-
-    // 4. 検証: Amplifyの signIn が入力した値で正しく呼び出されたか
-    expect(auth.signIn).toHaveBeenCalledWith({
-      username: 'testuser1',
-      password: 'Password123!'
+    // Profile コンポーネント内で fetchAuthSession と fetch が呼ばれるのでモック化
+    vi.mocked(auth.fetchAuthSession).mockResolvedValueOnce({
+      tokens: { accessToken: { toString: () => 'dummy-token' } as any }
+    });
+    
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: "success",
+        profile: {
+          user_id: 'dummy-id',
+          nickname: 'Test Nickname',
+          bio: 'Test Bio',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z'
+        }
+      })
     });
 
-    // 5. 検証: 非同期処理の完了後、画面が切り替わっているか（ログアウトボタンが出現しているか）
+    render(<App />);
+    
     await waitFor(() => {
-      expect(screen.getByText('ログイン成功: testuser1')).toBeDefined();
+      expect(screen.queryByText('Loading...')).toBeNull();
+    });
+
+    // プロフィール画面の要素が表示されること
+    await waitFor(() => {
+      expect(screen.getByText('プロフィール')).toBeDefined();
     });
     expect(screen.getByRole('button', { name: 'ログアウト' })).toBeDefined();
+    expect(screen.getByText('Test Nickname')).toBeDefined();
   });
 });
