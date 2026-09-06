@@ -64,7 +64,7 @@ const App: React.FC = () => {
       }
 
       const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-      const res = await fetch(`${apiUrl}/api/me`, {
+      const res = await fetch(`${apiUrl}/api/me/profile`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -101,7 +101,7 @@ const App: React.FC = () => {
         <div>
           <button onClick={handleLogout}>ログアウト</button>
           <hr />
-          <button onClick={callApi}>バックエンドAPIを叩く (/api/me)</button>
+          <button onClick={callApi}>プロフィールを取得 (/api/me/profile)</button>
           {apiResponse && (
             <pre style={{ background: '#f4f4f4', padding: '10px', marginTop: '10px' }}>
               {apiResponse}

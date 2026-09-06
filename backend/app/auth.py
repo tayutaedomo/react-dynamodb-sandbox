@@ -18,6 +18,16 @@ security = HTTPBearer()
 jwks_cache = {}
 
 def get_jwks():
+    """Cognito の JWKS (JSON Web Key Set) を取得する。
+
+    初回の呼び出し時に HTTP リクエストを行い、以降はメモリ内のキャッシュを返す。
+
+    Returns:
+        dict: Cognito から取得した JWKS の辞書
+
+    Raises:
+        HTTPException: JWKS の取得リクエストに失敗した場合 (HTTP 500)
+    """
     global jwks_cache
     if not jwks_cache:
         try:
@@ -30,6 +40,21 @@ def get_jwks():
     return jwks_cache
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """HTTP ヘッダーの JWT トークンを検証する。
+
+    Cognito の公開鍵 (JWKS) を使用して署名を検証し、
+    access トークンまたは id トークンのペイロード (クレーム) を返す。
+    FastAPI の Depends で依存関係として使用されることを想定している。
+
+    Args:
+        credentials (HTTPAuthorizationCredentials): HTTPBearer によって抽出された認証情報
+
+    Returns:
+        dict: トークンからデコードされた検証済みのクレーム情報
+
+    Raises:
+        HTTPException: トークンが無効、期限切れ、または検証に失敗した場合 (HTTP 401)
+    """
     token = credentials.credentials
     try:
         # ヘッダーから kid を取得

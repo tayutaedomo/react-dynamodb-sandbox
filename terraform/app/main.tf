@@ -98,6 +98,7 @@ resource "aws_lambda_function" "backend" {
       COGNITO_REGION       = data.aws_region.current.name
       COGNITO_USER_POOL_ID = aws_cognito_user_pool.main.id
       COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.main.id
+      DYNAMODB_TABLE_NAME  = aws_dynamodb_table.profiles.name
     }
   }
 }
@@ -146,4 +147,48 @@ resource "aws_lambda_permission" "apigw" {
   function_name = aws_lambda_function.backend.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.backend.execution_arn}/*/*"
+}
+
+# -------------------------------------------------------------
+# Phase 3: DynamoDB (Database)
+# -------------------------------------------------------------
+
+resource "aws_dynamodb_table" "profiles" {
+  name         = "react-dynamodb-sandbox-profiles"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "user_id"
+
+  attribute {
+    name = "user_id"
+    type = "S"
+  }
+}
+
+# Lambda 用の DynamoDB アクセス権限ポリシー
+resource "aws_iam_policy" "lambda_dynamodb" {
+  name        = "react-dynamodb-sandbox-lambda-dynamodb"
+  description = "Allow Lambda to access DynamoDB"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Scan",
+          "dynamodb:Query"
+        ]
+        Effect   = "Allow"
+        Resource = aws_dynamodb_table.profiles.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_dynamodb" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = aws_iam_policy.lambda_dynamodb.arn
 }
