@@ -71,7 +71,7 @@ def read_profile(claims: dict = Depends(verify_token)):
         default_data = {
             "nickname": username,
             "bio": "Nice to meet you!",
-            "created_at": datetime.datetime.utcnow().isoformat(),
+            "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
             "initialized_by": "api_lazy_init" # どこで初期化されたかをマーキング
         }
         profile = put_user_profile(user_id, default_data)
@@ -101,7 +101,7 @@ def update_profile(data: ProfileUpdate, claims: dict = Depends(verify_token)):
         **profile,
         "nickname": data.nickname,
         "bio": data.bio,
-        "updated_at": datetime.datetime.utcnow().isoformat()
+        "updated_at": datetime.datetime.now(datetime.UTC).isoformat()
     }
     
     saved = put_user_profile(user_id, updated_data)
