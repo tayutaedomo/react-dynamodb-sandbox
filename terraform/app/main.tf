@@ -103,6 +103,8 @@ resource "aws_lambda_function" "backend" {
       COGNITO_USER_POOL_ID = aws_cognito_user_pool.main.id
       COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.main.id
       DYNAMODB_TABLE_NAME  = aws_dynamodb_table.profiles.name
+      # フロントエンドのURLを動的に注入（手動デプロイ構成のため循環依存は発生しない）
+      FRONTEND_URL         = "https://${aws_amplify_branch.main.branch_name}.${aws_amplify_app.frontend.id}.amplifyapp.com"
     }
   }
 }
@@ -257,4 +259,32 @@ resource "aws_lambda_permission" "cognito_hook" {
   function_name = aws_lambda_function.cognito_hook.function_name
   principal     = "cognito-idp.amazonaws.com"
   source_arn    = aws_cognito_user_pool.main.arn
+}
+
+# -------------------------------------------------------------
+# Phase 5: Amplify Hosting (Frontend)
+# -------------------------------------------------------------
+
+resource "aws_amplify_app" "frontend" {
+  name = "react-dynamodb-sandbox-frontend"
+
+  # 手動デプロイ構成のため repository は指定しない
+
+  # SPA(Single Page Application)のためのリダイレクト設定
+  custom_rule {
+    source = "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json)$)([^.]+$)/>"
+    status = "200"
+    target = "/index.html"
+  }
+
+  environment_variables = {
+    VITE_COGNITO_USER_POOL_ID = aws_cognito_user_pool.main.id
+    VITE_COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.main.id
+    VITE_API_BASE_URL         = aws_apigatewayv2_api.backend.api_endpoint
+  }
+}
+
+resource "aws_amplify_branch" "main" {
+  app_id      = aws_amplify_app.frontend.id
+  branch_name = "main"
 }
