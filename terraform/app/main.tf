@@ -90,6 +90,16 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# 【重要】Lambda の CloudWatch ロググループの事前作成について
+# Lambda はアタッチ設定がなくても、`/aws/lambda/関数名` と完全一致する
+# ロググループが事前に存在すれば、自動的にそれを認識してログを書き込みます。
+# ここで明示的に定義しておかないと、Lambda が永久保存設定のロググループを
+# 勝手に作成してしまい、terraform destroy 時に削除漏れ（孤立）が発生します。
+resource "aws_cloudwatch_log_group" "backend_lambda" {
+  name              = "/aws/lambda/react-dynamodb-sandbox-backend"
+  retention_in_days = 14
+}
+
 # Lambda 関数 (コンテナイメージ)
 resource "aws_lambda_function" "backend" {
   function_name = "react-dynamodb-sandbox-backend"
@@ -370,6 +380,16 @@ resource "aws_iam_role_policy_attachment" "cognito_hook_basic" {
 resource "aws_iam_role_policy_attachment" "cognito_hook_dynamodb" {
   role       = aws_iam_role.cognito_hook_exec.name
   policy_arn = aws_iam_policy.lambda_dynamodb.arn
+}
+
+# 【重要】Lambda の CloudWatch ロググループの事前作成について
+# Lambda はアタッチ設定がなくても、`/aws/lambda/関数名` と完全一致する
+# ロググループが事前に存在すれば、自動的にそれを認識してログを書き込みます。
+# ここで明示的に定義しておかないと、Lambda が永久保存設定のロググループを
+# 勝手に作成してしまい、terraform destroy 時に削除漏れ（孤立）が発生します。
+resource "aws_cloudwatch_log_group" "cognito_hook_lambda" {
+  name              = "/aws/lambda/react-dynamodb-sandbox-cognito-hook"
+  retention_in_days = 14
 }
 
 resource "aws_lambda_function" "cognito_hook" {
