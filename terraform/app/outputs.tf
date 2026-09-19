@@ -12,7 +12,7 @@ output "cognito_region" {
 
 
 output "api_endpoint" {
-  value = aws_apigatewayv2_api.backend.api_endpoint
+  value = aws_api_gateway_stage.default.invoke_url
 }
 
 output "amplify_app_id" {

@@ -22,7 +22,7 @@ EOF
 echo "Deploying to Amplify App: $APP_ID (Branch: $BRANCH_NAME)"
 
 # Get deployment info
-COMMIT_HASH=$(git rev-parse HEAD)
+COMMIT_HASH=$(git rev-parse --short HEAD)
 DEPLOY_USER=$(git config user.name || echo "unknown")
 echo "Commit: $COMMIT_HASH by $DEPLOY_USER"
 
@@ -32,10 +32,11 @@ echo "Building the application..."
 npm run build
 
 # Zip artifacts
-echo "Zipping build artifacts..."
-rm -f build.zip
+ZIP_FILENAME="build-${COMMIT_HASH}.zip"
+echo "Zipping build artifacts into ${ZIP_FILENAME}..."
+rm -f dist/${ZIP_FILENAME}
 cd dist
-zip -r ../build.zip . > /dev/null
+zip -r ${ZIP_FILENAME} . > /dev/null
 cd ..
 
 # Create deployment
@@ -51,8 +52,8 @@ if [ -z "$JOB_ID" ] || [ -z "$UPLOAD_URL" ]; then
     exit 1
 fi
 
-echo "Uploading build.zip to S3..."
-curl -s -T build.zip "$UPLOAD_URL"
+echo "Uploading ${ZIP_FILENAME} to S3..."
+curl -s -T dist/${ZIP_FILENAME} "$UPLOAD_URL"
 
 echo "Starting deployment (Job ID: $JOB_ID)..."
 aws amplify start-deployment --app-id "$APP_ID" --branch-name "$BRANCH_NAME" --job-id "$JOB_ID" --output text
@@ -66,4 +67,4 @@ aws amplify tag-resource \
   --tags "LastDeployCommit=$COMMIT_HASH,LastDeployUser=$DEPLOY_USER"
 
 echo "Deployment submitted successfully!"
-rm -f build.zip
+echo "Evidence saved at: frontend/dist/${ZIP_FILENAME}"

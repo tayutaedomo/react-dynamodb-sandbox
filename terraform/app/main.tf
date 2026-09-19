@@ -8,6 +8,14 @@ terraform {
   }
 }
 
+
+# AWSの仕様上、Amplify 向けの WAF (CloudFront互換) は必ず us-east-1 に作成する必要があるため、
+# マルチリージョンデプロイ用のエイリアスプロバイダを定義しています。
+provider "aws" {
+  region = "us-east-1"
+  alias  = "us_east_1"
+}
+
 provider "aws" {
   region = "ap-northeast-1"
 }
@@ -109,41 +117,51 @@ resource "aws_lambda_function" "backend" {
   }
 }
 
-# API Gateway (HTTP API)
-resource "aws_apigatewayv2_api" "backend" {
-  name          = "react-dynamodb-sandbox-api"
-  protocol_type = "HTTP"
+# API Gateway (REST API)
+# ※ HTTP API (v2) は安価ですが AWS WAF に非対応のため、
+# WAF によるレート制限等の保護を行う目的で REST API (v1) を採用しています。
+resource "aws_api_gateway_rest_api" "backend" {
+  name = "react-dynamodb-sandbox-api"
+}
 
-  # フロントエンドからのリクエストを許可する CORS 設定
-  cors_configuration {
-    allow_origins = ["*"]
-    allow_methods = ["*"]
-    allow_headers = ["*"]
+resource "aws_api_gateway_resource" "proxy" {
+  rest_api_id = aws_api_gateway_rest_api.backend.id
+  parent_id   = aws_api_gateway_rest_api.backend.root_resource_id
+  path_part   = "{proxy+}"
+}
+
+resource "aws_api_gateway_method" "proxy" {
+  rest_api_id   = aws_api_gateway_rest_api.backend.id
+  resource_id   = aws_api_gateway_resource.proxy.id
+  http_method   = "ANY"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "lambda" {
+  rest_api_id = aws_api_gateway_rest_api.backend.id
+  resource_id = aws_api_gateway_method.proxy.resource_id
+  http_method = aws_api_gateway_method.proxy.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.backend.invoke_arn
+}
+
+resource "aws_api_gateway_deployment" "backend" {
+  depends_on = [
+    aws_api_gateway_integration.lambda,
+  ]
+  rest_api_id = aws_api_gateway_rest_api.backend.id
+  
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
-# Lambda への統合設定
-resource "aws_apigatewayv2_integration" "backend" {
-  api_id           = aws_apigatewayv2_api.backend.id
-  integration_type = "AWS_PROXY"
-
-  integration_method     = "POST"
-  integration_uri        = aws_lambda_function.backend.invoke_arn
-  payload_format_version = "2.0"
-}
-
-# ルーティング設定 (すべてのパスを Lambda に流す)
-resource "aws_apigatewayv2_route" "default" {
-  api_id    = aws_apigatewayv2_api.backend.id
-  route_key = "ANY /{proxy+}"
-  target    = "integrations/${aws_apigatewayv2_integration.backend.id}"
-}
-
-# ステージ設定
-resource "aws_apigatewayv2_stage" "default" {
-  api_id      = aws_apigatewayv2_api.backend.id
-  name        = "$default"
-  auto_deploy = true
+resource "aws_api_gateway_stage" "default" {
+  deployment_id = aws_api_gateway_deployment.backend.id
+  rest_api_id   = aws_api_gateway_rest_api.backend.id
+  stage_name    = "default"
 }
 
 # API Gateway から Lambda を呼び出す権限
@@ -152,7 +170,126 @@ resource "aws_lambda_permission" "apigw" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.backend.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.backend.execution_arn}/*/*"
+  source_arn    = "${aws_api_gateway_rest_api.backend.execution_arn}/*/*"
+}
+
+# -------------------------------------------------------------
+# Phase 2.5: AWS WAF (Rate-based rules & CloudWatch Logs)
+# -------------------------------------------------------------
+
+# CloudWatch Logs for WAF (API Gateway)
+resource "aws_cloudwatch_log_group" "waf_api" {
+  name              = "aws-waf-logs-api"
+  retention_in_days = 14
+}
+
+# AWS WAF for API Gateway (Regional)
+resource "aws_wafv2_web_acl" "api" {
+  name        = "react-dynamodb-sandbox-api-waf"
+  description = "WAF for API Gateway"
+  scope       = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "rate-limit"
+    priority = 1
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 100
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "api-rate-limit"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "api-waf"
+    sampled_requests_enabled   = true
+  }
+}
+
+# Enable WAF Logging for API Gateway
+resource "aws_wafv2_web_acl_logging_configuration" "api" {
+  log_destination_configs = [aws_cloudwatch_log_group.waf_api.arn]
+  resource_arn            = aws_wafv2_web_acl.api.arn
+}
+
+# Attach WAF to API Gateway
+resource "aws_wafv2_web_acl_association" "api" {
+  resource_arn = aws_api_gateway_stage.default.arn
+  web_acl_arn  = aws_wafv2_web_acl.api.arn
+}
+
+# CloudWatch Logs for WAF (Amplify)
+# Amplify Hosting 標準のアクセスログは2週間で消失してしまうため、
+# ログ保持期間の制限を回避する目的で WAF トラフィックログを CloudWatch に長期保存します。 - created in global region? No, cloudwatch logs must be in the same region as the resource. Wait, for GLOBAL WAF, the logs must be in us-east-1.
+resource "aws_cloudwatch_log_group" "waf_amplify" {
+  provider          = aws.us_east_1
+  name              = "aws-waf-logs-amplify"
+  retention_in_days = 90 # 長期保存
+}
+
+# AWS WAF for Amplify (Global)
+# Amplify Hosting の前段に配置する WAF。CloudFront 互換のスコープ (CLOUDFRONT) を指定し、
+# provider = aws.us_east_1 によってバージニア北部リージョンに作成します。
+resource "aws_wafv2_web_acl" "amplify" {
+  provider    = aws.us_east_1
+  name        = "react-dynamodb-sandbox-amplify-waf"
+  description = "WAF for Amplify Hosting"
+  scope       = "CLOUDFRONT"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "rate-limit"
+    priority = 1
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 100
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "amplify-rate-limit"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "amplify-waf"
+    sampled_requests_enabled   = true
+  }
+}
+
+# Enable WAF Logging for Amplify
+resource "aws_wafv2_web_acl_logging_configuration" "amplify" {
+  provider                = aws.us_east_1
+  log_destination_configs = [aws_cloudwatch_log_group.waf_amplify.arn]
+  resource_arn            = aws_wafv2_web_acl.amplify.arn
 }
 
 # -------------------------------------------------------------
@@ -269,6 +406,9 @@ resource "aws_amplify_app" "frontend" {
   name = "react-dynamodb-sandbox-frontend"
 
   # 手動デプロイ構成のため repository は指定しない
+  # ※ 以前は environment_variables を設定していましたが、手動デプロイ構成においては
+  #    デプロイスクリプト側で Terraform output から環境変数を生成するため不要です。
+  #    （また、ここに API Gateway の URL を入れると循環依存が発生するため削除しています）
 
   # SPA(Single Page Application)のためのリダイレクト設定
   custom_rule {
@@ -276,15 +416,16 @@ resource "aws_amplify_app" "frontend" {
     status = "200"
     target = "/index.html"
   }
-
-  environment_variables = {
-    VITE_COGNITO_USER_POOL_ID = aws_cognito_user_pool.main.id
-    VITE_COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.main.id
-    VITE_API_BASE_URL         = aws_apigatewayv2_api.backend.api_endpoint
-  }
 }
 
 resource "aws_amplify_branch" "main" {
   app_id      = aws_amplify_app.frontend.id
   branch_name = "main"
+}
+
+# Attach WAF to Amplify Hosting
+resource "aws_wafv2_web_acl_association" "amplify" {
+  provider     = aws.us_east_1
+  resource_arn = aws_amplify_app.frontend.arn
+  web_acl_arn  = aws_wafv2_web_acl.amplify.arn
 }

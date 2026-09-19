@@ -2,3 +2,8 @@
 # Playwright
 playwright-report/
 test-results/
+
+# Build artifacts
+dist/
+build/
+*.zip
