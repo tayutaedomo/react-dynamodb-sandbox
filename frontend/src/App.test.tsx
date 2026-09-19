@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as auth from 'aws-amplify/auth';
 import App from './App';
@@ -41,7 +41,7 @@ describe('App Component (Routing)', () => {
       tokens: { accessToken: { toString: () => 'dummy-token' } as any }
     });
     
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         status: "success",

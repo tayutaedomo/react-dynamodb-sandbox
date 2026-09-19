@@ -43,6 +43,9 @@ const App: React.FC = () => {
       ) : (
         <Profile onLogout={() => setUser(null)} />
       )}
+      <footer style={{ marginTop: '40px', fontSize: '0.8em', color: '#666' }}>
+        Version (Commit): {import.meta.env.VITE_COMMIT_HASH || 'local'}
+      </footer>
     </div>
   );
 };
