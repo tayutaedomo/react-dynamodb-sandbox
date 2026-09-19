@@ -55,3 +55,7 @@
    - API Gateway を WAF に対応した REST API として構築し、Amplify Hosting にも WAF をアタッチすることでフロント・バックエンド両方の防御層を確立。
    - 脆弱性スキャンや DDoS 攻撃を防ぐため、100リクエスト/5分間の「レートベースルール」を導入し、専用のスクリプトによる遮断テストを実施。
    - Amplify Hosting 標準のアクセスログが2週間で消失する課題に対し、WAF のロギング機能を CloudWatch Logs と連携させることで、半永久的なトラフィックのトレーサビリティを確保。
+9. **CloudFront + S3 と Amplify Hosting の並行構築と比較**
+   - 既存の Amplify Hosting に加え、同一の SPA を S3 と CloudFront (OAC) で配信するインフラを Terraform で並行構築し、挙動やデプロイフローを比較検証。
+   - バックエンド (FastAPI) 側の CORS 設定を拡張し、複数オリジンからのアクセスを許可する仕組みを実装。
+   - WAF (Web Application Firewall) をアタッチしてレート制限の動作テストを行った際、API Gateway (Regional) と CloudFront/Amplify (Global) でルール伝播やアクセス集計のタイムラグに顕著な差（仕様）があることを発見し、ADR として文書化。

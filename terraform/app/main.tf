@@ -112,7 +112,7 @@ resource "aws_lambda_function" "backend" {
       COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.main.id
       DYNAMODB_TABLE_NAME  = aws_dynamodb_table.profiles.name
       # フロントエンドのURLを動的に注入（手動デプロイ構成のため循環依存は発生しない）
-      FRONTEND_URL         = "https://${aws_amplify_branch.main.branch_name}.${aws_amplify_app.frontend.id}.amplifyapp.com"
+      FRONTEND_URL = "https://${aws_amplify_branch.main.branch_name}.${aws_amplify_app.frontend.id}.amplifyapp.com,https://${aws_cloudfront_distribution.spa.domain_name}"
     }
   }
 }
@@ -152,7 +152,7 @@ resource "aws_api_gateway_deployment" "backend" {
     aws_api_gateway_integration.lambda,
   ]
   rest_api_id = aws_api_gateway_rest_api.backend.id
-  
+
   lifecycle {
     create_before_destroy = true
   }
@@ -379,7 +379,7 @@ resource "aws_lambda_function" "cognito_hook" {
   runtime          = "python3.13"
   filename         = data.archive_file.cognito_hook.output_path
   source_code_hash = data.archive_file.cognito_hook.output_base64sha256
-  
+
   # For simple scripts on Lambda without external dependencies, arm64 or x86_64 works fine.
   architectures = ["arm64"]
 
@@ -428,4 +428,177 @@ resource "aws_wafv2_web_acl_association" "amplify" {
   provider     = aws.us_east_1
   resource_arn = aws_amplify_app.frontend.arn
   web_acl_arn  = aws_wafv2_web_acl.amplify.arn
+}
+
+# -------------------------------------------------------------
+# Phase 6: CloudFront + S3 (Alternative SPA Hosting)
+# Amplify とは別の、CloudFront と S3 を組み合わせた静的ウェブサイトホスティング環境
+# -------------------------------------------------------------
+
+# バケット名がグローバルで一意になるようにランダムな文字列を生成
+resource "random_string" "bucket_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+# SPA の静的ファイルを保存する S3 バケット
+resource "aws_s3_bucket" "spa" {
+  bucket = "react-dynamodb-sandbox-spa-${random_string.bucket_suffix.result}"
+}
+
+# セキュリティ対策: S3 バケットのパブリックアクセスを完全にブロック
+resource "aws_s3_bucket_public_access_block" "spa" {
+  bucket                  = aws_s3_bucket.spa.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# CloudFront から S3 へ安全にアクセスするための OAC (Origin Access Control)
+resource "aws_cloudfront_origin_access_control" "spa" {
+  name                              = "react-dynamodb-sandbox-spa-oac"
+  description                       = "OAC for SPA S3 bucket"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+# CloudFront 用の WAF アクセスログを長期保存するための CloudWatch ロググループ
+resource "aws_cloudwatch_log_group" "waf_cloudfront" {
+  provider          = aws.us_east_1
+  name              = "aws-waf-logs-cloudfront"
+  retention_in_days = 90
+}
+
+# CloudFront 用の WAF (グローバルに作成する必要があるため us-east-1 を指定)
+resource "aws_wafv2_web_acl" "cloudfront" {
+  provider    = aws.us_east_1
+  name        = "react-dynamodb-sandbox-cloudfront-waf"
+  description = "WAF for CloudFront SPA Hosting"
+  scope       = "CLOUDFRONT"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "rate-limit"
+    priority = 1
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 100
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "cloudfront-rate-limit"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "cloudfront-waf"
+    sampled_requests_enabled   = true
+  }
+}
+
+# CloudFront 用 WAF のロギング設定 (CloudWatch Logs へ転送)
+resource "aws_wafv2_web_acl_logging_configuration" "cloudfront" {
+  provider                = aws.us_east_1
+  log_destination_configs = [aws_cloudwatch_log_group.waf_cloudfront.arn]
+  resource_arn            = aws_wafv2_web_acl.cloudfront.arn
+}
+
+# CloudFront ディストリビューション
+resource "aws_cloudfront_distribution" "spa" {
+  origin {
+    domain_name              = aws_s3_bucket.spa.bucket_regional_domain_name
+    origin_id                = aws_s3_bucket.spa.id
+    origin_access_control_id = aws_cloudfront_origin_access_control.spa.id
+  }
+
+  enabled             = true
+  is_ipv6_enabled     = true
+  default_root_object = "index.html"
+
+  # CloudFront の場合はアソシエーションリソースではなく、ここに WAF の ARN を直接指定する
+  web_acl_id = aws_wafv2_web_acl.cloudfront.arn
+
+  default_cache_behavior {
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = aws_s3_bucket.spa.id
+
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 3600
+    max_ttl                = 86400
+  }
+
+  # SPA (React Router等) のためのフォールバック設定
+  # 存在しないパスへのアクセス (403/404) をすべて index.html に転送し、ステータス 200 で返す
+  custom_error_response {
+    error_caching_min_ttl = 0
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+  }
+
+  custom_error_response {
+    error_caching_min_ttl = 0
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+}
+
+# S3 バケットポリシー: CloudFront (OAC) からの読み取りアクセスのみを許可する
+resource "aws_s3_bucket_policy" "spa" {
+  bucket = aws_s3_bucket.spa.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowCloudFrontServicePrincipal"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.spa.arn}/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.spa.arn
+          }
+        }
+      }
+    ]
+  })
 }

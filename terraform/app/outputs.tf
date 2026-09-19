@@ -26,3 +26,18 @@ output "amplify_app_url" {
 output "amplify_branch_name" {
   value = aws_amplify_branch.main.branch_name
 }
+
+output "cloudfront_s3_bucket" {
+  description = "S3 Bucket Name for CloudFront SPA Hosting"
+  value       = aws_s3_bucket.spa.bucket
+}
+
+output "cloudfront_domain" {
+  description = "CloudFront Domain Name for SPA Hosting"
+  value       = "https://${aws_cloudfront_distribution.spa.domain_name}"
+}
+
+output "cloudfront_distribution_id" {
+  description = "CloudFront Distribution ID for SPA Hosting"
+  value       = aws_cloudfront_distribution.spa.id
+}

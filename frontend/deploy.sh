@@ -9,6 +9,8 @@ AWS_REGION=$(terraform output -raw cognito_region) # インフラと同期させ
 USER_POOL_ID=$(terraform output -raw cognito_user_pool_id)
 CLIENT_ID=$(terraform output -raw cognito_client_id)
 API_ENDPOINT=$(terraform output -raw api_endpoint)
+CF_BUCKET=$(terraform output -raw cloudfront_s3_bucket)
+CF_DIST_ID=$(terraform output -raw cloudfront_distribution_id)
 cd ../../frontend
 
 echo "Updating .env.local from Terraform outputs..."
@@ -66,5 +68,20 @@ aws amplify tag-resource \
   --resource-arn "$BRANCH_ARN" \
   --tags "LastDeployCommit=$COMMIT_HASH,LastDeployUser=$DEPLOY_USER"
 
-echo "Deployment submitted successfully!"
+echo "Amplify deployment submitted successfully!"
 echo "Evidence saved at: frontend/dist/${ZIP_FILENAME}"
+
+echo "---------------------------------------------------"
+echo "Deploying to CloudFront + S3..."
+echo "Syncing files to s3://${CF_BUCKET}..."
+aws s3 sync dist/ s3://${CF_BUCKET} --delete --exclude "${ZIP_FILENAME}"
+
+echo "Creating CloudFront invalidation for Distribution: ${CF_DIST_ID}..."
+INVALIDATION_ID=$(aws cloudfront create-invalidation \
+  --distribution-id "${CF_DIST_ID}" \
+  --paths "/*" \
+  --query "Invalidation.Id" \
+  --output text)
+
+echo "CloudFront invalidation started (ID: ${INVALIDATION_ID})"
+echo "All deployments finished successfully!"

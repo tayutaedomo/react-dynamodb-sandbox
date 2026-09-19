@@ -3,8 +3,8 @@ set -e
 
 TARGET=$1
 
-if [ "$TARGET" != "api" ] && [ "$TARGET" != "amplify" ]; then
-  echo "Usage: ./get_waf_logs.sh [api|amplify]"
+if [ "$TARGET" != "api" ] && [ "$TARGET" != "amplify" ] && [ "$TARGET" != "cloudfront" ]; then
+  echo "Usage: ./get_waf_logs.sh [api|amplify|cloudfront]"
   exit 1
 fi
 
@@ -12,9 +12,13 @@ if [ "$TARGET" = "api" ]; then
   LOG_GROUP="aws-waf-logs-api"
   # API Gateway WAF is regional
   REGION="ap-northeast-1"
-else
+elif [ "$TARGET" = "amplify" ]; then
   LOG_GROUP="aws-waf-logs-amplify"
   # Amplify WAF is always in us-east-1
+  REGION="us-east-1"
+elif [ "$TARGET" = "cloudfront" ]; then
+  LOG_GROUP="aws-waf-logs-cloudfront"
+  # CloudFront WAF is always in us-east-1
   REGION="us-east-1"
 fi
 

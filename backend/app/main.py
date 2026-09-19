@@ -1,4 +1,5 @@
 import datetime
+import os
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,15 +8,14 @@ from .auth import verify_token
 from .crud import get_user_profile, put_user_profile
 from .schemas import ProfileUpdate
 
-import os
-import re
-
 app = FastAPI(title="React DynamoDB Sandbox API")
 
 frontend_url = os.environ.get("FRONTEND_URL")
 allow_origins = ["http://localhost:5173"]
 if frontend_url:
-    allow_origins.append(frontend_url)
+    # カンマ区切りで複数のURLが渡される場合に対応
+    urls = [url.strip() for url in frontend_url.split(",") if url.strip()]
+    allow_origins.extend(urls)
 
 # 環境変数 FRONTEND_URL から取得した正確なドメインのみを許可
 app.add_middleware(
