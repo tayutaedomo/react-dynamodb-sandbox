@@ -10,7 +10,7 @@ interface UserProfile {
   nickname: string;
   bio: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
@@ -136,7 +136,7 @@ export const Profile: React.FC<ProfileProps> = ({ onLogout }) => {
               <p><strong>Nickname:</strong> {profile.nickname}</p>
               <p><strong>Bio:</strong> {profile.bio}</p>
               <p style={{ fontSize: '0.8em', color: '#666' }}>
-                更新日: {new Date(profile.updated_at).toLocaleString()}
+                更新日: {profile.updated_at ? new Date(profile.updated_at).toLocaleString() : 'なし'}
               </p>
               <button onClick={() => setIsEditing(true)} style={{ marginTop: '10px' }}>プロフィールを編集</button>
             </div>

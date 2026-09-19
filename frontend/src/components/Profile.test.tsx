@@ -22,7 +22,7 @@ describe('Profile Component', () => {
   });
 
   it('マウント時にプロフィールを取得して表示すること', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         status: "success",
@@ -52,7 +52,7 @@ describe('Profile Component', () => {
 
   it('編集モードへの切り替えと保存ができること', async () => {
     // 最初のGETリクエスト
-    global.fetch = vi.fn().mockResolvedValueOnce({
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         status: "success",
@@ -92,7 +92,7 @@ describe('Profile Component', () => {
       updated_at: '2026-01-02T00:00:00Z'
     };
     
-    global.fetch = vi.fn().mockResolvedValueOnce({
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         status: "success",
