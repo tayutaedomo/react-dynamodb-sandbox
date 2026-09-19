@@ -7,12 +7,20 @@ from .auth import verify_token
 from .crud import get_user_profile, put_user_profile
 from .schemas import ProfileUpdate
 
+import os
+import re
+
 app = FastAPI(title="React DynamoDB Sandbox API")
 
-# Vite のデフォルトポート (5173) からのアクセスを許可
+frontend_url = os.environ.get("FRONTEND_URL")
+allow_origins = ["http://localhost:5173"]
+if frontend_url:
+    allow_origins.append(frontend_url)
+
+# 環境変数 FRONTEND_URL から取得した正確なドメインのみを許可
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
